@@ -1,5 +1,5 @@
 Add-Type -Assemblyname System.IdentityModel
-#$ErrorActionPreference = 'silentlycontinue'
+$ErrorActionPreference = 'silentlycontinue'
 
 #variabler
 
